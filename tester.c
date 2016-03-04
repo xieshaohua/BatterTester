@@ -206,7 +206,7 @@ static void tester_mainloop(void)
 		int nevents;
 		int timeout = -1;
 
-		timeout = tester_mode_ops->preparetowait();
+		timeout = tester_mode_ops->preparetowait(&tester_status);
 		nevents = epoll_wait(epollfd, events, eventct, timeout);
 
 		if (nevents == -1) {
@@ -222,9 +222,9 @@ static void tester_mainloop(void)
 		}
 
 		if (!nevents)
-		    periodic_chores();
+			tester_periodic_chores();
 
-		tester_mode_ops->heartbeat();
+		tester_mode_ops->heartbeat(&tester_status);
 	}
 	return;
 }
