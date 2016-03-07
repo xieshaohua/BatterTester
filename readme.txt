@@ -24,3 +24,11 @@ items:
 <poweroff_dischargind>
 
 
+struct tester_mode_ops {
+	void (*init)(struct tester_status *status);		// 开机初始化执行
+	int (*preparetowait)(struct tester_status *status);	// mainloop timeout, 可用于系统唤醒状态下设置周期执行的时间
+	void (*heartbeat)(struct tester_status *status);	// 周期和事件都会执行
+	void (*update)(struct tester_status *status);		// 周期执行
+};
+
+

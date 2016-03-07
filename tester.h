@@ -56,6 +56,20 @@
 #define TESTER_STEP_DISCHARGING			1
 #define TESTER_STEP_REBOOT			2
 
+#define BATTERY_PROPS_ITEM_LEN			64
+enum proptype{
+	POWER_SUPPLY_STATUS = 0,
+	POWER_SUPPLY_PRESENT,
+	POWER_SUPPLY_BATTERY_CHARGING_ENABLED,
+	POWER_SUPPLY_CHARGING_ENABLED,
+	POWER_SUPPLY_CHARGE_TYPE,
+	POWER_SUPPLY_CAPACITY,
+	POWER_SUPPLY_HEALTH,
+	POWER_SUPPLY_CURRENT_NOW,
+	POWER_SUPPLY_VOLTAGE_NOW,
+	POWER_SUPPLY_TEMP,
+};
+
 struct convert_items {
 	char *name;
 	int item_id;
@@ -71,30 +85,52 @@ struct item_steps {
 	int step_id[MAX_ITEM_STEPS];
 };
 
+struct battery_props {
+	int status;
+	int present;
+	int battery_charging_enabled;
+	int charging_enabled;
+	int charging_type;
+	int capacity;
+	int health;
+	int current_now;
+	int voltage_now;
+	int temp;
+};
+
 struct tester_status {
 	int item_id;
 	int step_id;
+	int log_enable;
+	char *logfile;
+	struct battery_props batt_props;
 };
 
 struct tester_mode_ops {
-	void (*init)(struct tester_status *status);
+	int (*init)(struct tester_status *status);
 	int (*preparetowait)(struct tester_status *status);
 	void (*heartbeat)(struct tester_status *status);
 	void (*update)(struct tester_status *status);
 };
 
+extern struct tester_status tester_status;
+
+
+extern int get_next_content(char *str, char *content);
 
 /* tester */
 extern int tester_register_event(int fd, void (*handler)(uint32_t));
+extern void tester_finish(void);
 
 /* wakealarm */
 extern void wakealarm_init(void);
 
 /* monitor */
-void monitor_updatelog(void);
+extern int monitor_init(struct tester_status *status);
+extern void monitor_updatelog(void);
 
 /* pon charging */
-extern void pon_charging_init(struct tester_status *status);
+extern int pon_charging_init(struct tester_status *status);
 extern int pon_charging_preparetowait(struct tester_status *status);
 extern void pon_charging_heartbeat(struct tester_status *status);
 extern void pon_charging_update(struct tester_status *status);

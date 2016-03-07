@@ -2,6 +2,9 @@
 
 static int epollfd;
 static int eventct;
+static struct tester_mode_ops *tester_mode_ops = NULL;
+
+struct tester_status tester_status;
 
 static const struct convert_items items_tbl[] = {
 	{"pon_charging",	TESTER_ITEM_PON_CHARGING},
@@ -37,8 +40,6 @@ static struct tester_mode_ops pon_charging_ops = {
 	.update = pon_charging_update,
 };
 
-struct tester_mode_ops *tester_mode_ops = NULL;
-struct tester_status tester_status;
 
 int tester_register_event(int fd, void (*handler)(uint32_t))
 {
@@ -54,11 +55,6 @@ int tester_register_event(int fd, void (*handler)(uint32_t))
 	return 0;
 }
 
-static void tester_periodic_chores(void)
-{
-	tester_mode_ops->update(&tester_status);
-}
-
 static int tester_init(void)
 {
 	epollfd = epoll_create(MAX_EPOLL_EVENTS);
@@ -66,21 +62,30 @@ static int tester_init(void)
 		TESTER_DEBUG("epoll_create failed; errno=\n");
 		return -1;
 	}
+	monitor_init(&tester_status);
 	wakealarm_init();
-	return 0;
+	
+	return tester_mode_ops->init(&tester_status);
 }
 
-static int get_first_item(char *buf, char *item, int size)
+int get_next_content(char *str, char *content)
 {
-	int i;
+	int i = 0, st = -1;
 
-	for (i = 0; i < size; i++) {
-		if (buf[i] == '\n') {
-			strncpy(item, buf, i);
-			item[i] = '\0';
-			return i;
+	/* find next content begining with displayable characters and end with '\n' or '\0' */
+	do {
+		if (st != -1) {
+			if ((str[i] == '\n') || (str[i] == '\0')) {
+				strncpy(content, str + st, i - st);
+				content[i] = '\0';
+				return (i + 1);
+			}
+		} else {
+			/* if the ascii characters which can display */
+			if ((str[i] >= 32) && (str[i] <= 126))
+				st = i;
 		}
-	}
+	} while (str[i++] != '\0');
 	return -1;
 }
 
@@ -163,7 +168,7 @@ static void tester_poweron_init(void)
 			exit(-1);
 		}
 		printf("items:\n%s", buf);
-		if (get_first_item(buf, item, sizeof(buf)) < 0) {
+		if (get_next_content(buf, item) < 0) {
 			printf("Can't find first item\n");
 			exit(-1);
 		}
@@ -222,7 +227,7 @@ static void tester_mainloop(void)
 		}
 
 		if (!nevents)
-			tester_periodic_chores();
+			tester_mode_ops->update(&tester_status);
 
 		tester_mode_ops->heartbeat(&tester_status);
 	}
@@ -236,14 +241,27 @@ int main(void)
 	tester_poweron_init();
 	printf("tester start: item=%s, step=%s\n", items_tbl[tester_status.item_id].name,
 						steps_tbl[tester_status.step_id].name);
-
+	switch (tester_status.item_id) {
+	case TESTER_ITEM_PON_CHARGING:
+		tester_mode_ops = &pon_charging_ops;
+		break;
+	default:
+		printf("error: tester_mode_ops is NULL\n");
+		break;
+	};
+	
 	ret = tester_init();
 	if (ret) {
 		TESTER_DEBUG("Initialization failed, exiting\n");
 		exit(-1);
 	}
-
 	tester_mainloop();
-	TESTER_DEBUG("hello world\n");
-	return 0;
+	TESTER_DEBUG("tester run error!\n");
+	return ret;
 }
+
+void tester_finish(void)
+{
+
+}
+
