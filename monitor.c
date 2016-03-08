@@ -1,5 +1,8 @@
 #include "tester.h"
 
+#define MONITOR_LOGBUF_SIZE		(1 * 1024)
+#define TIME_TIMESTAMP_LEN		20
+
 static char logbuf[MONITOR_LOGBUF_SIZE + 1];
 
 const char proptype_tbl[][BATTERY_PROPS_ITEM_LEN] = {
@@ -165,7 +168,7 @@ void monitor_updatelog(void)
 	char *cp = logbuf;
 
 	cp = set_timestamp(cp);
-	read_battinfo(POWER_SUPPLY_SYSFS_PATH, cp, MONITOR_LOGBUF_SIZE - TIME_TIMESTAMP_LEN);
+	read_battinfo(POWER_SUPPLY_SYSFS, cp, MONITOR_LOGBUF_SIZE - TIME_TIMESTAMP_LEN);
 	parse_battprops(&tester_status.batt_props, cp);
 	if (tester_status.log_enable && tester_status.logfile)
 		write_battlog(tester_status.logfile, logbuf, MONITOR_LOGBUF_SIZE);

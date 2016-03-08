@@ -7,32 +7,32 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
-//#include <io.h>
 #include <time.h>
 #include <sys/epoll.h>
 #include <sys/timerfd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <cutils/klog.h>
+#include <cutils/android_reboot.h>
+
 
 #define LOG_TAG				"battary_test"
-#define TEST_LOGS_DIR_PATH		"/data/batt_logs"
+/* log file dir */
+#define TESTER_LOG_FILE_DIR		"/data/batt_logs"
 
-#define TEST_STATE_ENABLE		TEST_LOGS_DIR_PATH"/enable"
-#define TEST_STATE_ITEM			TEST_LOGS_DIR_PATH"/items"
-#define TEST_STATE_STEP			TEST_LOGS_DIR_PATH"/step"
+/* status files */
+#define TESTER_STAT_FILE_ENABLE		TESTER_LOG_FILE_DIR"/enable"
+#define TESTER_STAT_FILE_ITEMS		TESTER_LOG_FILE_DIR"/items"
+#define TESTER_STAT_FILE_STEP		TESTER_LOG_FILE_DIR"/step"
 
-/* logs */
-#define TEST_PON_CHARGING_LOG		TEST_LOGS_DIR_PATH"/poweron_charging.log"
-#define TEST_PON_DISCHARGING_LOG	TEST_LOGS_DIR_PATH"/poweron_discharging.log"
-#define TEST_POFF_CHARGING_LOG		TEST_LOGS_DIR_PATH"/poweroff_charging.log"
-#define TEST_POFF_DISCHARGING_LOG	TEST_LOGS_DIR_PATH"/poweroff_discharging.log"
+/* log files */
+#define TESTER_PON_CHARGING_LOG		TESTER_LOG_FILE_DIR"/pon_charging.log"
+#define TESTER_PON_DISCHARGING_LOG	TESTER_LOG_FILE_DIR"/pon_discharging.log"
+#define TESTER_POFF_CHARGING_LOG	TESTER_LOG_FILE_DIR"/poff_charging.log"
+#define TESTER_POFF_DISCHARGING_LOG	TESTER_LOG_FILE_DIR"/poff_discharging.log"
 
-
-
-#define POWER_SUPPLY_SYSFS_PATH 	"/sys/class/power_supply/battery/uevent"
-#define MONITOR_LOGBUF_SIZE		(1 * 1024)
-#define TIME_TIMESTAMP_LEN		20
+/* power supply sys node */
+#define POWER_SUPPLY_SYSFS 		"/sys/class/power_supply/battery/uevent"
 
 
 #define TESTER_DEBUG(fmt)	printf(fmt)
@@ -57,7 +57,7 @@
 #define TESTER_STEP_REBOOT			2
 
 #define BATTERY_PROPS_ITEM_LEN			64
-enum proptype{
+enum proptype {
 	POWER_SUPPLY_STATUS = 0,
 	POWER_SUPPLY_PRESENT,
 	POWER_SUPPLY_BATTERY_CHARGING_ENABLED,
@@ -113,6 +113,14 @@ struct tester_mode_ops {
 	void (*update)(struct tester_status *status);
 };
 
+/* discharge */
+enum discharge_method {
+	DISCHARGE_METHOD_NULL		= 0x00,
+	DISCHARGE_METHOD_CPU		= 0x01,
+	DISCHARGE_METHOD_FLASH		= 0x02,
+	DISCHARGE_METHOD_VIBRATE	= 0x04,
+};
+
 extern struct tester_status tester_status;
 
 
@@ -129,11 +137,18 @@ extern void wakealarm_init(void);
 extern int monitor_init(struct tester_status *status);
 extern void monitor_updatelog(void);
 
+/* discharge */
+extern void discharge_start(enum discharge_method method);
+extern void discharge_stop(void);
+extern void charging_enable(void);
+extern void charging_disable(void);
+
+
 /* pon charging */
-extern int pon_charging_init(struct tester_status *status);
+//extern int pon_charging_init(struct tester_status *status);
 extern int pon_charging_preparetowait(struct tester_status *status);
 extern void pon_charging_heartbeat(struct tester_status *status);
-extern void pon_charging_update(struct tester_status *status);
+//extern void pon_charging_update(struct tester_status *status);
 
 
 #endif

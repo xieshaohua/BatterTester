@@ -3,7 +3,7 @@
 LOCAL_PATH := $(call my-dir)
 include $(CLEAR_VARS)
 
-LOCAL_SRC_FILES := tester.c wakealarm.c monitor.c pon_charging.c tester.h
+LOCAL_SRC_FILES := tester.c wakealarm.c monitor.c pon_charging.c discharge.c tester.h
 
 LOCAL_MODULE := battst
 

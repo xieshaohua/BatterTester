@@ -34,10 +34,10 @@ static const struct item_steps item_steps_tbl[] = {
 };
 
 static struct tester_mode_ops pon_charging_ops = {
-	.init = pon_charging_init,
+//	.init = NULL,
 	.preparetowait = pon_charging_preparetowait,
 	.heartbeat = pon_charging_heartbeat,
-	.update = pon_charging_update,
+//	.update = pon_charging_update,
 };
 
 
@@ -64,8 +64,11 @@ static int tester_init(void)
 	}
 	monitor_init(&tester_status);
 	wakealarm_init();
-	
-	return tester_mode_ops->init(&tester_status);
+
+	if (tester_mode_ops->init)
+		return tester_mode_ops->init(&tester_status);
+	else
+		return 0;
 }
 
 int get_next_content(char *str, char *content)
@@ -111,95 +114,95 @@ static int tester_verify_step(char *step)
 	return TESTER_STEP_NULL;
 }
 
-static void tester_poweron_init(void)
+static int tester_poweron_init(void)
 {
-	int fd, pos, count = 0;
+	int fd, tmp, count = 0;
 	char buf[1024];
 	char item[32];
 	char step[32];
 
-	if (access(TEST_LOGS_DIR_PATH, R_OK | W_OK) == -1) {
-		printf("%s don't exist:%s\n", TEST_LOGS_DIR_PATH, strerror(errno));
-		if (mkdir(TEST_LOGS_DIR_PATH, 0666) == -1) {
-			printf("can't creat %s:%s", TEST_LOGS_DIR_PATH, strerror(errno));
-			exit(-1);
+	/* check and create status files if not exist */
+	if (access(TESTER_LOG_FILE_DIR, R_OK | W_OK) == -1) {
+		printf("TESTER: %s not exist!\n", TESTER_LOG_FILE_DIR);
+		if (mkdir(TESTER_LOG_FILE_DIR, 0666) == -1) {
+			printf("TESTER: can't creat %s:%s", TESTER_LOG_FILE_DIR, strerror(errno));
+			return -1;
 		}
-		if (creat(TEST_STATE_ENABLE, 0666) == -1) {
-			printf("can't creat %s:%s", TEST_STATE_ENABLE, strerror(errno));
-			exit(-1);
+		if (creat(TESTER_STAT_FILE_ENABLE, 0666) == -1) {
+			printf("TESTER: can't creat %s:%s", TESTER_STAT_FILE_ENABLE, strerror(errno));
+			return -1;
 		}
-		if (creat(TEST_STATE_ITEM, 0666) == -1) {
-			printf("can't creat %s:%s", TEST_STATE_ITEM, strerror(errno));
-			exit(-1);
+		if (creat(TESTER_STAT_FILE_ITEMS, 0666) == -1) {
+			printf("TESTER: can't creat %s:%s", TESTER_STAT_FILE_ITEMS, strerror(errno));
+			return -1;
 		}
-		if (creat(TEST_STATE_STEP, 0666) == -1) {
-			printf("can't creat %s:%s", TEST_STATE_STEP, strerror(errno));
-			exit(-1);
+		#if 0
+		if (creat(TESTER_STAT_FILE_STEP, 0666) == -1) {
+			printf("can't creat %s:%s", TESTER_STAT_FILE_STEP, strerror(errno));
+			return -1;
 		}
+		#endif
 		printf("Creat files success\n");
-		exit(-1);
+		return -1;
 	}
-	
-	fd = open(TEST_STATE_ENABLE, O_RDONLY);
-	if (fd < 0) {
-		printf("Could not open %s:%s\n", TEST_STATE_ENABLE, strerror(errno));
-		exit(-1);
-	}
-	memset(buf, 0, sizeof(buf));
-	count = read(fd, buf, 1);
-	if ((count < 1) || buf[0] != '1') {
-		printf("enable=%s\n", buf);
-		exit(-1);
-	}
-	close(fd);
 
-	if (buf[0] == '1') {
-		/* read out and verify item info */
-		fd = open(TEST_STATE_ITEM, O_RDONLY);
+	/* check enable */
+	fd = open(TESTER_STAT_FILE_ENABLE, O_RDONLY);
+	if (fd < 0) {
+		printf("TESTER: can't open %s:%s\n", TESTER_STAT_FILE_ENABLE, strerror(errno));
+		return -1;
+	}
+	count = read(fd, buf, 1);
+	close(fd);
+	if ((count < 1) || buf[0] != '1') {
+		printf("TESTER: enable=%s\n", buf);
+		return -1;
+	} else {
+		/* readout and verify items info */
+		fd = open(TESTER_STAT_FILE_ITEMS, O_RDONLY);
 		if (fd < 0) {
-			printf("Could not open %s:%s\n", TEST_STATE_ITEM, strerror(errno));
-			exit(-1);
+			printf("TESTER: can't open %s:%s\n", TESTER_STAT_FILE_ITEMS, strerror(errno));
+			return -1;
 		}
-		memset(buf, 0, sizeof(buf));
-		count = read(fd, buf, sizeof(buf));
+		count = read(fd, buf, sizeof(buf) - 1);
 		close(fd);
 		if ((count < 1)) {
-			printf("%s is empty:%s\n", TEST_STATE_ITEM, strerror(errno));
-			exit(-1);
+			printf("%s may be empty:%s\n", TESTER_STAT_FILE_ITEMS, strerror(errno));
+			return -1;
 		}
-		printf("items:\n%s", buf);
+		buf[count] = '\0';
+		printf("TESTER: items:\n%s", buf);
 		if (get_next_content(buf, item) < 0) {
-			printf("Can't find first item\n");
-			exit(-1);
+			printf("TESTER: can't find first item\n");
+			return -1;
 		}
-		printf("item:%s\n", item);
+		printf("TESTER: first item:%s\n", item);
 		tester_status.item_id = tester_verify_item(item);
-		if (tester_status.item_id < 0) {
-			printf("invalid item name:%s\n", item);
-			exit(-1);
+		if (tester_status.item_id == TESTER_ITEM_NULL) {
+			printf("TESTER: invalid item: %s\n", item);
+			return -1;
 		}
 		tester_status.step_id = item_steps_tbl[tester_status.item_id].step_id[0];
 		
-		/* read out step info if it exist */
-		fd = open(TEST_STATE_STEP, O_RDONLY);
+		/* readout step info if it exist */
+		fd = open(TESTER_STAT_FILE_STEP, O_RDONLY);
 		if (fd < 0) {
-			printf("Could not open %s:%s\n", TEST_STATE_STEP, strerror(errno));
-			exit(-1);
+			printf("TESTER: %s not exist:%s\n", TESTER_STAT_FILE_STEP, strerror(errno));
+			return 0;
 		}
-		memset(step, 0, sizeof(step));
 		count = read(fd, step, sizeof(step) - 1);
 		close(fd);
 		if ((count < 1)) {
-			printf("%s is empty:%s\n", TEST_STATE_STEP, strerror(errno));
-			return;
+			printf("TESTER: %s may be empty:%s\n", TESTER_STAT_FILE_STEP, strerror(errno));
+			return 0;
 		}
 		step[count] = '\0';
-		tester_status.step_id = tester_verify_step(step);
-		if (tester_status.step_id < 0) {
-			printf("invalid step name:%s\n", step);
-			return;
-		}
+		printf("TESTER: step:%s\n", step);
+		tmp = tester_verify_step(step);
+		if (tmp != TESTER_STEP_NULL)
+			tester_status.step_id = tmp;
 	}
+	return 0;
 }
 
 static void tester_mainloop(void)
@@ -211,7 +214,8 @@ static void tester_mainloop(void)
 		int nevents;
 		int timeout = -1;
 
-		timeout = tester_mode_ops->preparetowait(&tester_status);
+		if (tester_mode_ops->preparetowait)
+			timeout = tester_mode_ops->preparetowait(&tester_status);
 		nevents = epoll_wait(epollfd, events, eventct, timeout);
 
 		if (nevents == -1) {
@@ -226,10 +230,11 @@ static void tester_mainloop(void)
 				(*(void (*)(int))events[i].data.ptr)(events[i].events);
 		}
 
-		if (!nevents)
+		if (!nevents && tester_mode_ops->update)
 			tester_mode_ops->update(&tester_status);
 
-		tester_mode_ops->heartbeat(&tester_status);
+		if (tester_mode_ops->heartbeat)
+			tester_mode_ops->heartbeat(&tester_status);
 	}
 	return;
 }
@@ -238,9 +243,15 @@ int main(void)
 {
 	int ret;
 
-	tester_poweron_init();
-	printf("tester start: item=%s, step=%s\n", items_tbl[tester_status.item_id].name,
+	ret = tester_poweron_init();
+	if (ret) {
+		printf("TESTER: tester_poweron_init fail!\n");
+		return ret;
+	}
+	
+	printf("[tester start]: item=%s, step=%s\n", items_tbl[tester_status.item_id].name,
 						steps_tbl[tester_status.step_id].name);
+#if 0
 	switch (tester_status.item_id) {
 	case TESTER_ITEM_PON_CHARGING:
 		tester_mode_ops = &pon_charging_ops;
@@ -257,6 +268,7 @@ int main(void)
 	}
 	tester_mainloop();
 	TESTER_DEBUG("tester run error!\n");
+#endif
 	return ret;
 }
 
