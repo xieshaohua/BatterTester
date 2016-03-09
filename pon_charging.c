@@ -23,9 +23,7 @@ void pon_charging_heartbeat(struct tester_status *status)
 		if (status->batt_props.capacity > 1) {
 			if (status->batt_props.charging_enabled)
 				charging_disable();
-			discharge_start(DISCHARGE_METHOD_VIBRATE |
-					DISCHARGE_METHOD_FLASH |
-					DISCHARGE_METHOD_CPU);
+			discharge_start(DISCHARGE_METHOD_VIBRATE);
 		} else {
 			tester_finish();
 			android_reboot(ANDROID_RB_RESTART, 0, 0);

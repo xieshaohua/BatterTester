@@ -29,8 +29,10 @@ static const struct item_steps item_steps_tbl[] = {
 			TESTER_STEP_NULL,
 		},
 	},
-//	[TESTER_ITEM_PON_DISCHARGING] = {
-//	},
+	[TESTER_ITEM_PON_DISCHARGING] = {
+		.step_id = {
+		},
+	},
 };
 
 static struct tester_mode_ops pon_charging_ops = {
@@ -40,6 +42,10 @@ static struct tester_mode_ops pon_charging_ops = {
 //	.update = pon_charging_update,
 };
 
+static struct tester_mode_ops *tester_mode_ops_tbl[] = {
+	[TESTER_ITEM_PON_CHARGING]	= &pon_charging_ops,
+	[TESTER_ITEM_PON_DISCHARGING]	= NULL,
+};
 
 int tester_register_event(int fd, void (*handler)(uint32_t))
 {
@@ -80,7 +86,7 @@ int get_next_content(char *str, char *content)
 		if (st != -1) {
 			if ((str[i] == '\n') || (str[i] == '\0')) {
 				strncpy(content, str + st, i - st);
-				content[i] = '\0';
+				content[i - st] = '\0';
 				return (i + 1);
 			}
 		} else {
@@ -92,7 +98,7 @@ int get_next_content(char *str, char *content)
 	return -1;
 }
 
-static int tester_verify_item(char *item)
+static int get_items_id(char *item)
 {
 	int i;
 
@@ -103,7 +109,7 @@ static int tester_verify_item(char *item)
 	return TESTER_ITEM_NULL;
 }
 
-static int tester_verify_step(char *step)
+static int get_steps_id(char *step)
 {
 	int i;
 
@@ -112,6 +118,28 @@ static int tester_verify_step(char *step)
 			return steps_tbl[i].step_id;
 	}
 	return TESTER_STEP_NULL;
+}
+
+static char *get_items_name(int item_id)
+{
+	int i;
+
+	for (i = 0; i < (int)(sizeof(items_tbl)/sizeof(items_tbl[0])); i++) {
+		if (items_tbl[i].item_id == item_id)
+			return items_tbl[i].name;
+	}
+	return NULL;
+}
+
+static char *get_steps_name(int step_id)
+{
+	int i;
+
+	for (i = 0; i < (int)(sizeof(steps_tbl)/sizeof(steps_tbl[0])); i++) {
+		if (steps_tbl[i].step_id == step_id)
+			return steps_tbl[i].name;
+	}
+	return NULL;
 }
 
 static int tester_poweron_init(void)
@@ -172,12 +200,22 @@ static int tester_poweron_init(void)
 		}
 		buf[count] = '\0';
 		printf("TESTER: items:\n%s", buf);
-		if (get_next_content(buf, item) < 0) {
+		#if 0
+		{
+			int c = 0, p = 0;
+			printf("item parse:\n");
+			while((c = get_next_content(buf + p, item)) != -1) {
+				p += c;
+				printf("%s\n", item);
+			}
+		}
+		#endif
+		if (get_next_content(buf, item) == -1) {
 			printf("TESTER: can't find first item\n");
 			return -1;
 		}
 		printf("TESTER: first item:%s\n", item);
-		tester_status.item_id = tester_verify_item(item);
+		tester_status.item_id = get_items_id(item);
 		if (tester_status.item_id == TESTER_ITEM_NULL) {
 			printf("TESTER: invalid item: %s\n", item);
 			return -1;
@@ -198,7 +236,7 @@ static int tester_poweron_init(void)
 		}
 		step[count] = '\0';
 		printf("TESTER: step:%s\n", step);
-		tmp = tester_verify_step(step);
+		tmp = get_steps_id(step);
 		if (tmp != TESTER_STEP_NULL)
 			tester_status.step_id = tmp;
 	}
@@ -249,17 +287,14 @@ int main(void)
 		return ret;
 	}
 	
-	printf("[tester start]: item=%s, step=%s\n", items_tbl[tester_status.item_id].name,
-						steps_tbl[tester_status.step_id].name);
-#if 0
-	switch (tester_status.item_id) {
-	case TESTER_ITEM_PON_CHARGING:
-		tester_mode_ops = &pon_charging_ops;
-		break;
-	default:
-		printf("error: tester_mode_ops is NULL\n");
-		break;
-	};
+	printf("[tester start]: item=%s, step=%s\n", get_items_name(tester_status.item_id),
+							get_steps_name(tester_status.step_id));
+
+	tester_mode_ops = tester_mode_ops_tbl[tester_status.item_id];
+	if (tester_mode_ops == NULL) {
+		printf("TESTER: tester_mode_ops == NULL\n");
+		return -1;
+	}
 	
 	ret = tester_init();
 	if (ret) {
@@ -268,7 +303,6 @@ int main(void)
 	}
 	tester_mainloop();
 	TESTER_DEBUG("tester run error!\n");
-#endif
 	return ret;
 }
 
