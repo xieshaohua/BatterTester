@@ -1,11 +1,10 @@
 #include "tester.h"
 
 #define MONITOR_LOGBUF_SIZE		(1 * 1024)
-#define TIME_TIMESTAMP_LEN		20
 
 static char logbuf[MONITOR_LOGBUF_SIZE + 1];
 
-const char proptype_tbl[][BATTERY_PROPS_ITEM_LEN] = {
+const char proptype_tbl[][TESTER_CONTENT_SIZE] = {
 	{"POWER_SUPPLY_STATUS"},
 	{"POWER_SUPPLY_PRESENT"},
 	{"POWER_SUPPLY_BATTERY_CHARGING_ENABLED"},
@@ -40,17 +39,25 @@ static size_t read_battinfo(const char *path, char *buf, size_t size)
 	return count;
 }
 
-static size_t write_battlog(const char *path, char *buf, size_t size)
+static int write_batterylog(const char *path, char *buf, int size)
 {
 	int fd;
-	size_t count = 0;
+	int count = 0;
 	
-	if (path == NULL)
+	if ((path == NULL) || (buf == NULL))
 		return -1;
 
-	fd = open(path, O_RDWR | O_CREAT | O_APPEND, S_IRWXU);
+	/* check and create batt_logs/logs if not exist */
+	if (access(TESTER_LOG_FILE_LOG_DIR, R_OK | W_OK) == -1) {
+		if (mkdir(TESTER_LOG_FILE_LOG_DIR, 0666) == -1) {
+			printf("can't create %s:%s", TESTER_LOG_FILE_LOG_DIR, strerror(errno));
+			return -1;
+		}
+	}
+
+	fd = open(path, O_RDWR | O_CREAT | O_APPEND, 0666);
 	if (fd < 0) {
-		printf("Could not open:%s\n", strerror(fd));
+		printf("could not open:%s\n", strerror(fd));
 		return -1;
 	}
 
@@ -61,19 +68,6 @@ static size_t write_battlog(const char *path, char *buf, size_t size)
 
 	close(fd);
 	return count;
-}
-
-static char *set_timestamp(char *buf)
-{
-	time_t now;
-	struct tm *tt;
-
-	time(&now);
-	tt = localtime(&now);
-	snprintf(buf, TIME_TIMESTAMP_LEN + 1, "%04d-%02d-%02d %02d:%02d:%02d\n",
-				tt->tm_year + 1900, tt->tm_mon, tt->tm_mday,
-				tt->tm_hour, tt->tm_min, tt->tm_sec);
-	return (buf + TIME_TIMESTAMP_LEN);
 }
 
 int monitor_init(struct tester_status *status)
@@ -105,9 +99,9 @@ static int get_propnameval(char *content, char *name, char *val)
 static int battery_getprop(char *str, enum proptype type)
 {
 	int value = -1, pos = 0, cnt = 0;
-	char content[BATTERY_PROPS_ITEM_LEN];
-	char propname[BATTERY_PROPS_ITEM_LEN];
-	char propval[BATTERY_PROPS_ITEM_LEN];
+	char content[TESTER_CONTENT_SIZE];
+	char propname[TESTER_CONTENT_SIZE];
+	char propval[TESTER_CONTENT_SIZE];
 
 	//printf("str:\n%s", str);
 	while ((cnt = get_next_content(str + pos, content)) != -1) {
@@ -167,11 +161,13 @@ void monitor_updatelog(void)
 {
 	char *cp = logbuf;
 
-	cp = set_timestamp(cp);
-	read_battinfo(POWER_SUPPLY_SYSFS, cp, MONITOR_LOGBUF_SIZE - TIME_TIMESTAMP_LEN);
+	get_timestamp(cp);
+	cp[TIME_TIMESTAMP_SIZE] = '\n';
+	cp += TIME_TIMESTAMP_SIZE + 1;
+	read_battinfo(POWER_SUPPLY_SYSFS, cp, MONITOR_LOGBUF_SIZE - TIME_TIMESTAMP_SIZE);
 	parse_battprops(&tester_status.batt_props, cp);
-	if (tester_status.log_enable && tester_status.logfile)
-		write_battlog(tester_status.logfile, logbuf, MONITOR_LOGBUF_SIZE);
+	if (tester_status.log_enable && tester_status.log_path)
+		write_batterylog(tester_status.log_path, logbuf, MONITOR_LOGBUF_SIZE);
 	//printf("%s", logbuf);
 }
 
