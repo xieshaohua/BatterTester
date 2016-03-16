@@ -33,7 +33,7 @@ void pon_charging_heartbeat(struct tester_status *status)
 			discharge_start(DISCHARGE_METHOD_VIBRATE);
 		} else {
 			tester_finish();
-			android_reboot(ANDROID_RB_RESTART, 0, 0);
+			//android_reboot(ANDROID_RB_RESTART, 0, 0);
 		}
 	} else if (status->step_id == 1) {
 		status->log_enable = 1;
@@ -49,6 +49,6 @@ void pon_charging_heartbeat(struct tester_status *status)
 		}
 	}
 	
-	printf("%s %s: %s\n", get_timestamp(timestamp), get_items_name(status->item_id),
+	DEBUG("%s %s: %s\n", get_timestamp(timestamp), get_items_name(status->item_id),
 				tester_status.items_desc->step_msg[tester_status.step_id]);
 }

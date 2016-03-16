@@ -14,9 +14,15 @@
 #include <sys/types.h>
 #include <cutils/klog.h>
 #include <cutils/android_reboot.h>
+#include <cutils/properties.h>
 
 
-#define LOG_TAG				"battary_test"
+/* debug */
+#define KLOG_LEVEL			6
+#define KLOG_TAG			"battst"
+//#define DEBUG(fmt, ...)			printf(fmt, ##__VA_ARGS__)
+#define DEBUG(fmt, ...)			KLOG_INFO(KLOG_TAG, fmt, ##__VA_ARGS__)
+
 /* log file dir */
 #define TESTER_LOG_FILE_DIR		"/data/batt_logs"
 #define TESTER_LOG_FILE_LOG_DIR		"/data/batt_logs/logs"
@@ -34,12 +40,6 @@
 
 /* power supply sys node */
 #define POWER_SUPPLY_SYSFS 		"/sys/class/power_supply/battery/uevent"
-
-
-#define TESTER_DEBUG(fmt)	printf(fmt)
-//#define TESTER_DEBUG(fmt)	KLOG_ERROR(LOG_TAG, fmt)
-
-#define KLOG_LEVEL	6
 
 #define MAX_EPOLL_EVENTS			20
 #define DEFAULT_WAKEALARM_INTERVAL		1

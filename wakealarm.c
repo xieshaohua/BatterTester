@@ -18,7 +18,7 @@ static void wakealarm_set_interval(int interval)
 	itval.it_value.tv_nsec = 0;
 
 	if (timerfd_settime(wakealarm_fd, 0, &itval, NULL) == -1)
-		TESTER_DEBUG("wakealarm_set_interval: timerfd_settime failed\n");
+		DEBUG("wakealarm_set_interval: timerfd_settime failed\n");
 }
 
 static void wakealarm_event(uint32_t epevents)
@@ -28,10 +28,10 @@ static void wakealarm_event(uint32_t epevents)
 	epevents = epevents;
 
 	if (read(wakealarm_fd, &wakeups, sizeof(wakeups)) == -1) {
-		TESTER_DEBUG("wakealarm_event: read wakealarm fd failed\n");
+		DEBUG("wakealarm_event: read wakealarm fd failed\n");
 		return;
 	}
-	TESTER_DEBUG("wakealarm_event\n");
+	//DEBUG("wakealarm_event\n");
 	monitor_updatelog();
 	
 	if (wakeup_time != tester_status.alarm_interval) {
@@ -44,12 +44,12 @@ void wakealarm_init(struct tester_status *status)
 {
 	wakealarm_fd = timerfd_create(CLOCK_BOOTTIME_ALARM, TFD_NONBLOCK);
 	if (wakealarm_fd == -1) {
-		TESTER_DEBUG("wakealarm_init: timerfd_create failed\n");
+		DEBUG("wakealarm_init: timerfd_create failed\n");
 		return;
 	}
 
 	if (tester_register_event(wakealarm_fd, wakealarm_event))
-		TESTER_DEBUG("Registration of wakealarm event failed\n");
+		DEBUG("Registration of wakealarm event failed\n");
 
 	wakealarm_set_interval(status->alarm_interval);
 }

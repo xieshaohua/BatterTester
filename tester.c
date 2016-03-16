@@ -43,7 +43,7 @@ int tester_register_event(int fd, void (*handler)(uint32_t))
 	ev.events = EPOLLIN | EPOLLWAKEUP;
 	ev.data.ptr = (void *)handler;
 	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev) == -1) {
-		TESTER_DEBUG("epoll_ctl failed; errno\n");
+		DEBUG("epoll_ctl failed; errno\n");
 		return -1;
 	}
 	eventct++;
@@ -54,7 +54,7 @@ static int tester_init(void)
 {
 	epollfd = epoll_create(MAX_EPOLL_EVENTS);
 	if (epollfd == -1) {
-		TESTER_DEBUG("epoll_create failed; errno=\n");
+		DEBUG("epoll_create failed; errno=\n");
 		return -1;
 	}
 	monitor_init(&tester_status);
@@ -161,48 +161,48 @@ static int tester_parse_items(void)
 	char buf[TESTER_CONTENT_SIZE + 1];
 	char *pitems, *pcases, *str;
 
-	printf("parsing items and updating cases\n");
+	DEBUG("parsing items and updating cases\n");
 	pitems = malloc(TESTER_ITEMS_BUF_SIZE + 1);
 	pcases = malloc(TESTER_ITEMS_BUF_SIZE + 1);
 	if ((pitems == NULL) || (pcases == NULL)) {
-		printf("parse items malloc error!\n");
+		DEBUG("parse items malloc error!\n");
 		goto error;
 	}
 	fd = open(TESTER_STAT_FILE_ITEMS, O_RDONLY);
 	if (fd < 0) {
-		printf("%s open fail!\n", TESTER_STAT_FILE_ITEMS);
+		DEBUG("%s open fail!\n", TESTER_STAT_FILE_ITEMS);
 		goto error;
 	}
 	cnt = read(fd, pitems, TESTER_ITEMS_BUF_SIZE);
 	close(fd);
 	if (cnt < 1) {
-		printf("%s may be empty!\n", TESTER_STAT_FILE_ITEMS);
+		DEBUG("%s may be empty!\n", TESTER_STAT_FILE_ITEMS);
 		goto error;
 	}
 	pitems[cnt] = '\0';
-	printf("items:\n%s", pitems);
+	DEBUG("items:\n%s", pitems);
 	/* verify items and generate cases file */
 	str = pcases;
 	while ((cnt = get_next_content(pitems + pos, buf)) != -1) {
 		pos += cnt;
 		if (get_items_id(buf) == TESTER_ITEM_NULL) {
-			printf("invalid item: %s\n", buf);
+			DEBUG("invalid item: %s\n", buf);
 			goto error;
 		}
 		size = snprintf(str, TESTER_CONTENT_SIZE, "%s=0\n", buf);
 		str += size;
 	}
-	printf("cases:\n%s\n", pcases);
+	DEBUG("cases:\n%s\n", pcases);
 	fd = open(TESTER_STAT_FILE_CASES, O_RDWR | O_CREAT | O_TRUNC, 0666);
 	if (fd < 0) {
-		printf("%s open fail:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
+		DEBUG("%s open fail:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
 		goto error;
 	}
 	size = strlen(pcases);
 	cnt = write(fd, pcases, size);
 	close(fd);
 	if (cnt != size) {
-		printf("%s: need %d but write %d\n", strerror(errno), size, cnt);
+		DEBUG("%s: need %d but write %d\n", strerror(errno), size, cnt);
 		goto error;
 	}
 	free(pitems);
@@ -212,6 +212,25 @@ error:
 	if (pitems) free(pitems);
 	if (pcases) free(pcases);
 	return -1;
+}
+
+static void tester_poweroff_check(void)
+{
+	char property_val[PROP_VALUE_MAX];
+
+	property_get("ro.bootmode", property_val, "");
+	DEBUG("ro.bootmode=%s\n", property_val);
+	if (!strcmp("charger", property_val)) {
+		DEBUG("booting from charger mode!\n");
+		#if 0
+		if ((tester_status.item_id != TESTER_ITEM_POFF_CHARGING) ||
+		    (tester_status.item_id != TESTER_ITEM_POFF_DISCHARGING)) {
+		    	DEBUG("reboot system...\n");
+			android_reboot(ANDROID_RB_RESTART, 0, 0);
+			while (1);
+		}
+		#endif
+	}
 }
 
 static int tester_poweron_init(void)
@@ -224,40 +243,40 @@ static int tester_poweron_init(void)
 
 	/* check and create batt_logs/enable if not exist */
 	if (access(TESTER_LOG_FILE_DIR, R_OK | W_OK) == -1) {
-		printf("%s not exist!\n", TESTER_LOG_FILE_DIR);
+		DEBUG("%s not exist!\n", TESTER_LOG_FILE_DIR);
 		if (mkdir(TESTER_LOG_FILE_DIR, 0666) == -1) {
-			printf("can't create %s:%s", TESTER_LOG_FILE_DIR, strerror(errno));
+			DEBUG("can't create %s:%s", TESTER_LOG_FILE_DIR, strerror(errno));
 			return -1;
 		}
 		if (creat(TESTER_STAT_FILE_ENABLE, 0666) == -1) {
-			printf("can't create %s:%s", TESTER_STAT_FILE_ENABLE, strerror(errno));
+			DEBUG("can't create %s:%s", TESTER_STAT_FILE_ENABLE, strerror(errno));
 			return -1;
 		}
-		printf("create /batt_logs/enable success\n");
+		DEBUG("create /batt_logs/enable success\n");
 		return -1;
 	}
 
 	/* check enable */
 	fd = open(TESTER_STAT_FILE_ENABLE, O_RDONLY);
 	if (fd < 0) {
-		printf("can't open %s:%s\n", TESTER_STAT_FILE_ENABLE, strerror(errno));
+		DEBUG("can't open %s:%s\n", TESTER_STAT_FILE_ENABLE, strerror(errno));
 		return -1;
 	}
 	memset(buf1, 0, sizeof(buf1));
 	cnt = read(fd, buf1, sizeof(buf1));
 	close(fd);
 	if ((cnt != 2) || buf1[0] != '1') {
-		printf("enable = %s\n", buf1);
+		DEBUG("enable = %s\n", buf1);
 		return -1;
 	}
 	/* check items and cases file */
 	if (stat(TESTER_STAT_FILE_ITEMS, &items_stat) != 0) {
-		printf("%s stat error:%s\n", TESTER_STAT_FILE_ITEMS, strerror(errno));
+		DEBUG("%s stat error:%s\n", TESTER_STAT_FILE_ITEMS, strerror(errno));
 		return -1;
 	}
 	err = stat(TESTER_STAT_FILE_CASES, &cases_stat);
 	if ((err != 0) && (errno != ENOENT)) {
-		printf("%s stat error!:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
+		DEBUG("%s stat error!:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
 		return -1;
 	}
 	if ((errno == ENOENT) || (items_stat.st_mtime > cases_stat.st_mtime)) {
@@ -265,44 +284,44 @@ static int tester_poweron_init(void)
 			return -1;
 		/* delete logs directory */
 		if (system("rm -rf /data/batt_logs/logs") != 0) {
-			printf("can't del %s\n", TESTER_LOG_FILE_LOG_DIR);
+			DEBUG("can't del %s\n", TESTER_LOG_FILE_LOG_DIR);
 			return -1;
 		}
 	}
 	/* readout cases files and set items_id/step_id */
 	pcases = malloc(TESTER_ITEMS_BUF_SIZE + 1);
 	if (pcases == NULL) {
-		printf("pcases malloc error!\n");
+		DEBUG("pcases malloc error!\n");
 		return -1;
 	}
 	fd = open(TESTER_STAT_FILE_CASES, O_RDONLY);
 	if (fd < 0) {
-		printf("can't open %s:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
+		DEBUG("can't open %s:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
 		goto error;
 	}
 	cnt = read(fd, pcases, TESTER_ITEMS_BUF_SIZE);
 	close(fd);
 	if ((cnt < 1)) {
-		printf("%s may be empty:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
+		DEBUG("%s may be empty:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
 		goto error;
 	}
 	pcases[cnt] = '\0';
-	printf("cases:\n%s\n", pcases);
+	DEBUG("cases:\n%s\n", pcases);
 	if (first_ready_item(pcases, buf1, buf2) == -1) {
-		printf("can't find first ready item\n");
+		DEBUG("can't find first ready item\n");
 		goto error;
 	}
-	printf("first ready item:%s, current step:%s\n", buf1, buf2);
+	DEBUG("first ready item:%s, current step:%s\n", buf1, buf2);
 	tester_status.item_id = get_items_id(buf1);
 	if (tester_status.item_id == TESTER_ITEM_NULL) {
-		printf("invalid item: %s\n", buf1);
+		DEBUG("invalid item: %s\n", buf1);
 		goto error;
 	}
 	tester_status.items_desc = items_desc_tbl[tester_status.item_id];
 	tester_status.step_id = atoi(buf2);
 	if ((tester_status.step_id >= tester_status.items_desc->step_id_limit)
 	    || (tester_status.step_id < 0)) {
-		printf("invalid step id\n");
+		DEBUG("invalid step id\n");
 		goto error;
 	}
 	free(pcases);
@@ -328,7 +347,7 @@ static void tester_mainloop(void)
 		if (nevents == -1) {
 			if (errno == EINTR)
 				continue;
-			TESTER_DEBUG("tester_mainloop: epoll_wait failed\n");
+			DEBUG("tester_mainloop: epoll_wait failed\n");
 			break;
 		}
 
@@ -348,32 +367,36 @@ static void tester_mainloop(void)
 
 int main(void)
 {
-	int ret;
+	int ret = 0;
+
+	klog_set_level(KLOG_LEVEL);
 
 	ret = tester_poweron_init();
 	if (ret) {
-		printf("tester_poweron_init fail!\n");
+		DEBUG("tester_poweron_init fail!\n");
 		return ret;
 	}
-	
-	printf("[tester start]: item_id=%d:%s\n", tester_status.item_id,
+
+	tester_poweroff_check();
+
+	DEBUG("[tester start]: item_id=%d:%s\n", tester_status.item_id,
 						  get_items_name(tester_status.item_id));
-	printf("[tester start]: step_id=%d:%s\n", tester_status.step_id,
+	DEBUG("[tester start]: step_id=%d:%s\n", tester_status.step_id,
 				tester_status.items_desc->step_msg[tester_status.step_id]);
 
 	tester_mode_ops = tester_mode_ops_tbl[tester_status.item_id];
 	if (tester_mode_ops == NULL) {
-		printf("tester_mode_ops == NULL\n");
+		DEBUG("tester_mode_ops == NULL\n");
 		return -1;
 	}
 	
 	ret = tester_init();
 	if (ret) {
-		TESTER_DEBUG("Initialization failed, exiting\n");
+		DEBUG("Initialization failed, exiting\n");
 		exit(-1);
 	}
 	tester_mainloop();
-	TESTER_DEBUG("tester run error!\n");
+	DEBUG("tester run error!\n");
 	return ret;
 }
 
@@ -382,28 +405,28 @@ void tester_finish(void)
 	int fd, pos, cnt, size;
 	char *pcases, buf[2];
 
-	printf("[tester finish]:%s\n", tester_status.items_desc->step_msg[tester_status.step_id]);
+	DEBUG("[tester finish]:%s\n", tester_status.items_desc->step_msg[tester_status.step_id]);
 	pcases = malloc(TESTER_ITEMS_BUF_SIZE);
 	if (pcases == NULL) {
-		printf("tester_finish malloc error!\n");
+		DEBUG("tester_finish malloc error!\n");
 		return;
 	}
 	fd = open(TESTER_STAT_FILE_CASES, O_RDONLY);
 	if (fd < 0) {
-		printf("can't open %s:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
+		DEBUG("can't open %s:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
 		goto error;
 	}
 	cnt = read(fd, pcases, TESTER_ITEMS_BUF_SIZE);
 	close(fd);
 	if ((cnt < 1)) {
-		printf("%s may be empty:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
+		DEBUG("%s may be empty:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
 		goto error;
 	}
 	pcases[cnt] = '\0';
 	pos = first_ready_item(pcases, NULL, NULL);
 	snprintf(buf, sizeof(buf), "%d", tester_status.step_id);
 	if (pcases[pos] != buf[0]) {
-		printf("match error:step_id=%d, buf=%s\n", tester_status.step_id, buf);
+		DEBUG("match error:step_id=%d, buf=%s\n", tester_status.step_id, buf);
 		goto error;
 	}
 	/* reboot if finished the whole item test or increase step_id and write back */
@@ -414,19 +437,19 @@ void tester_finish(void)
 
 	fd = open(TESTER_STAT_FILE_CASES, O_RDWR | O_CREAT | O_TRUNC, 0666);
 	if (fd < 0) {
-		printf("%s open fail:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
+		DEBUG("%s open fail:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
 		goto error;
 	}
 	size = strlen(pcases);
 	cnt = write(fd, pcases, size);
 	if (cnt != size) {
-		printf("%s: need %d but write %d\n", strerror(errno), size, cnt);
+		DEBUG("%s: need %d but write %d\n", strerror(errno), size, cnt);
 		goto error;
 	}
 	if (pcases[pos] == 'y') {
 		free(pcases);
 		close(fd);
-		printf("reboot system...\n");
+		DEBUG("reboot system...\n");
 		android_reboot(ANDROID_RB_RESTART, 0, 0);
 		while (1);
 	}
