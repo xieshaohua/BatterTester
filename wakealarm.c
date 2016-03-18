@@ -34,13 +34,13 @@ static void wakealarm_event(uint32_t epevents)
 	//DEBUG("wakealarm_event\n");
 	monitor_updatelog();
 	
-	if (wakeup_time != tester_status.alarm_interval) {
-		wakeup_time = tester_status.alarm_interval;
+	if (wakeup_time != battst_status.alarm_interval) {
+		wakeup_time = battst_status.alarm_interval;
 		wakealarm_set_interval(wakeup_time);
 	}
 }
 
-void wakealarm_init(struct tester_status *status)
+void wakealarm_init(struct battst_status *status)
 {
 	wakealarm_fd = timerfd_create(CLOCK_BOOTTIME_ALARM, TFD_NONBLOCK);
 	if (wakealarm_fd == -1) {

@@ -4,7 +4,7 @@
 
 static char logbuf[MONITOR_LOGBUF_SIZE + 1];
 
-const char proptype_tbl[][TESTER_CONTENT_SIZE] = {
+const char proptype_tbl[][CONTENT_BUF_SIZE] = {
 	{"POWER_SUPPLY_STATUS"},
 	{"POWER_SUPPLY_PRESENT"},
 	{"POWER_SUPPLY_BATTERY_CHARGING_ENABLED"},
@@ -48,9 +48,9 @@ static int write_batterylog(const char *path, char *buf, int size)
 		return -1;
 
 	/* check and create batt_logs/logs if not exist */
-	if (access(TESTER_LOG_FILE_LOG_DIR, R_OK | W_OK) == -1) {
-		if (mkdir(TESTER_LOG_FILE_LOG_DIR, 0666) == -1) {
-			DEBUG("can't create %s:%s", TESTER_LOG_FILE_LOG_DIR, strerror(errno));
+	if (access(DIR_LOGS_FILE, R_OK | W_OK) == -1) {
+		if (mkdir(DIR_LOGS_FILE, 0666) == -1) {
+			DEBUG("can't create %s:%s", DIR_LOGS_FILE, strerror(errno));
 			return -1;
 		}
 	}
@@ -70,7 +70,7 @@ static int write_batterylog(const char *path, char *buf, int size)
 	return count;
 }
 
-int monitor_init(struct tester_status *status)
+int monitor_init(struct battst_status *status)
 {
 	return 0;
 }
@@ -99,9 +99,9 @@ static int get_propnameval(char *content, char *name, char *val)
 static int battery_getprop(char *str, enum proptype type)
 {
 	int value = -1, pos = 0, cnt = 0;
-	char content[TESTER_CONTENT_SIZE];
-	char propname[TESTER_CONTENT_SIZE];
-	char propval[TESTER_CONTENT_SIZE];
+	char content[CONTENT_BUF_SIZE];
+	char propname[CONTENT_BUF_SIZE];
+	char propval[CONTENT_BUF_SIZE];
 
 	//DEBUG("str:\n%s", str);
 	while ((cnt = get_next_content(str + pos, content)) != -1) {
@@ -165,9 +165,9 @@ void monitor_updatelog(void)
 	cp[TIME_TIMESTAMP_SIZE] = '\n';
 	cp += TIME_TIMESTAMP_SIZE + 1;
 	read_battinfo(POWER_SUPPLY_SYSFS, cp, MONITOR_LOGBUF_SIZE - TIME_TIMESTAMP_SIZE);
-	parse_battprops(&tester_status.batt_props, cp);
-	if (tester_status.log_enable && tester_status.log_path)
-		write_batterylog(tester_status.log_path, logbuf, MONITOR_LOGBUF_SIZE);
+	parse_battprops(&battst_status.batt_props, cp);
+	if (battst_status.log_enable && battst_status.log_path)
+		write_batterylog(battst_status.log_path, logbuf, MONITOR_LOGBUF_SIZE);
 	//DEBUG("%s", logbuf);
 }
 

@@ -20,25 +20,29 @@ static struct discharge_status_type {
 
 void charging_enable(void)
 {
-	if (system("echo 1 > /sys/class/power_supply/battery/charging_enabled") != 0)
+	const char *path = "/sys/class/power_supply/battery/charging_enabled";
+	if (write_file(path, "1", sizeof("1")) < 0)
 		DEBUG("ERROR: charging_enable fail!\n");
 }
 
 void charging_disable(void)
 {
-	if (system("echo 0 > /sys/class/power_supply/battery/charging_enabled") != 0)
+	const char *path = "/sys/class/power_supply/battery/charging_enabled";
+	if (write_file(path, "0", sizeof("0")) < 0)
 		DEBUG("ERROR: charging_disable fail!\n");
 }
 
 static void discharge_wake_lock(void)
 {
-	if (system("echo 'battst_discharge' > /sys/power/wake_lock") != 0)
+	const char *path = "/sys/power/wake_lock";
+	if (write_file(path, "battst_discharge", sizeof("battst_discharge")) < 0)
 		DEBUG("ERROR: discharge_wake_lock fail!\n");
 }
 
 static void discharge_wake_unlock(void)
 {
-	if (system("echo 'battst_discharge' > /sys/power/wake_unlock") != 0)
+	const char *path = "/sys/power/wake_lock";
+	if (write_file(path, "battst_discharge", sizeof("battst_discharge")) < 0)
 		DEBUG("ERROR: discharge_wake_unlock fail!\n");
 }
 
@@ -71,17 +75,19 @@ static void *cpu_discharge_thread(void *arg)
 
 static void *flash_discharge_thread(void *arg)
 {
+	const char *torch0_path = "/sys/class/leds/torch-light0/brightness";
+	const char *torch1_path = "/sys/class/leds/torch-light1/brightness";
+
 	while (1) {
 		if (discharge_status.flash_discharge_enable) {
-			if (system("echo 510 > /sys/class/leds/torch-light0/brightness") != 0)
+			if (write_file(torch0_path, "510", sizeof("510")) < 0)
 				DEBUG("ERROR: flash_discharge_thread fail!\n");
-			if (system("echo 510 > /sys/class/leds/torch-light1/brightness") != 0)
+			if (write_file(torch1_path, "510", sizeof("510")) < 0)
 				DEBUG("ERROR: flash_discharge_thread fail!\n");
-
 		} else {
-			if (system("echo 0 > /sys/class/leds/torch-light0/brightness") != 0)
+			if (write_file(torch0_path, "0", sizeof("0")) < 0)
 				DEBUG("ERROR: flash_discharge_thread fail!\n");
-			if (system("echo 0 > /sys/class/leds/torch-light1/brightness") != 0)
+			if (write_file(torch1_path, "0", sizeof("0")) < 0)
 				DEBUG("ERROR: flash_discharge_thread fail!\n");
 			DEBUG("INFO: flash_discharge_thread exit\n");
 			discharge_status.discharge_method &= ~DISCHARGE_METHOD_FLASH;
@@ -93,10 +99,13 @@ static void *flash_discharge_thread(void *arg)
 
 static void *vibrate_discharge_thread(void *arg)
 {
+	const char *path = "/sys/class/timed_output/vibrator/enable";
+
 	while (1) {
 		if (discharge_status.vibrate_discharge_enable) {
-			if (system("echo 10000 > /sys/class/timed_output/vibrator/enable") != 0)
+			if (write_file(path, "10000", sizeof("10000")) < 0)
 				DEBUG("ERROR: vibrate_discharge_thread fail!\n");
+			
 		} else {
 			DEBUG("INFO: vibrate_discharge_thread exit\n");
 			discharge_status.discharge_method &= ~DISCHARGE_METHOD_VIBRATE;

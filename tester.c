@@ -2,41 +2,22 @@
 
 static int epollfd;
 static int eventct;
-static struct tester_mode_ops *tester_mode_ops = NULL;
+static struct battst_mode_ops *battst_mode_ops = NULL;
 
-struct tester_status tester_status = {
+struct battst_status battst_status = {
 	.log_enable = 0,
 	.log_path = NULL,
 	.alarm_interval = DEFAULT_WAKEALARM_INTERVAL,
 };
 
-static const struct items_convert items_tbl[] = {
-	{"pon_charging",	TESTER_ITEM_PON_CHARGING},
-	{"pon_discharging",	TESTER_ITEM_PON_DISCHARGING},
-	{"poff_charging",	TESTER_ITEM_POFF_CHARGING},
-	{"poff_discharging",	TESTER_ITEM_POFF_DISCHARGING},
-	{"item_null",		TESTER_ITEM_NULL},
+extern const struct item_desc pon_charging_item_desc;
+
+static const struct item_desc *item_desc_tbl[] = {
+	&pon_charging_item_desc,
 };
 
-static const struct items_desc *items_desc_tbl[] = {
-	[TESTER_ITEM_PON_CHARGING]	= &pon_charging_desc,
-	[TESTER_ITEM_PON_DISCHARGING]	= &pon_charging_desc,
-	[TESTER_ITEM_POFF_CHARGING]	= &pon_charging_desc,
-	[TESTER_ITEM_POFF_DISCHARGING]	= &pon_charging_desc,
-};
 
-static struct tester_mode_ops pon_charging_ops = {
-	.heartbeat = pon_charging_heartbeat,
-};
-
-static struct tester_mode_ops *tester_mode_ops_tbl[] = {
-	[TESTER_ITEM_PON_CHARGING]	= &pon_charging_ops,
-	[TESTER_ITEM_PON_DISCHARGING]	= &pon_charging_ops,
-	[TESTER_ITEM_POFF_CHARGING]	= &pon_charging_ops,
-	[TESTER_ITEM_POFF_DISCHARGING]	= &pon_charging_ops,
-};
-
-int tester_register_event(int fd, void (*handler)(uint32_t))
+int battst_register_event(int fd, void (*handler)(uint32_t))
 {
 	struct epoll_event ev;
 
@@ -50,133 +31,66 @@ int tester_register_event(int fd, void (*handler)(uint32_t))
 	return 0;
 }
 
-static int tester_init(void)
+static int battst_init(void)
 {
 	epollfd = epoll_create(MAX_EPOLL_EVENTS);
 	if (epollfd == -1) {
 		DEBUG("epoll_create failed; errno=\n");
 		return -1;
 	}
-	monitor_init(&tester_status);
-	wakealarm_init(&tester_status);
+	monitor_init(&battst_status);
+	wakealarm_init(&battst_status);
 
-	if (tester_mode_ops->init)
-		return tester_mode_ops->init(&tester_status);
+	if (battst_mode_ops->init)
+		return battst_mode_ops->init(&battst_status);
 	else
 		return 0;
 }
 
-int get_next_content(char *str, char *content)
-{
-	int i = 0, st = -1;
-
-	if ((str == NULL) || (content == NULL))
-		return -1;
-
-	/* find next content begining with displayable characters and end with '\n' or '\0' */
-	do {
-		if (st != -1) {
-			if ((str[i] == '\n') || (str[i] == '\0')) {
-				strncpy(content, str + st, i - st);
-				content[i - st] = '\0';
-				return (i + 1);
-			}
-		} else {
-			/* if the ascii characters which can display */
-			if ((str[i] >= 32) && (str[i] <= 126))
-				st = i;
-		}
-	} while (str[i++] != '\0');
-	return -1;
-}
-
-int first_ready_item(char *str, char *item, char *step)
-{
-	int i, len, cnt, pos = 0;
-	char buf[TESTER_CONTENT_SIZE + 1];
-	
-	if (str == NULL)
-		return -1;
-
-	while ((cnt = get_next_content(str + pos, buf)) != -1) {
-		len = strlen(buf);
-		for (i = 0; i < len; i++) {
-			if (buf[i] == '=')
-				break;
-		}
-		if (i == len)
-			return -1;
-		if (buf[i + 1] != 'y') {
-			if ((item != NULL) && (step != NULL)) {
-				strncpy(item, buf, i);
-				item[i] = '\0';
-				strncpy(step, buf + i + 1, len - i - 1);
-				step[len - i - 1] = '\0';
-			}
-			return (pos + i + 1);	/* step_id position */
-		}
-		pos += cnt;
-	}
-	return -1;
-}
-
-int get_items_id(char *item)
+const struct item_desc *get_item_desc(const char *item)
 {
 	int i;
 
-	for (i = 0; i < (int)(sizeof(items_tbl)/sizeof(items_tbl[0])); i++) {
-		if (strcmp(items_tbl[i].name, item) == 0)
-			return items_tbl[i].item_id;
-	}
-	return TESTER_ITEM_NULL;
-}
-
-char *get_items_name(int item_id)
-{
-	int i;
-
-	for (i = 0; i < (int)(sizeof(items_tbl)/sizeof(items_tbl[0])); i++) {
-		if (items_tbl[i].item_id == item_id)
-			return items_tbl[i].name;
+	for (i = 0; i < (int)(sizeof(item_desc_tbl)/sizeof(item_desc_tbl[0])); i++) {
+		if (strcmp(item_desc_tbl[i]->name, item) == 0)
+			return item_desc_tbl[i];
 	}
 	return NULL;
 }
 
-char *get_timestamp(char *buf)
+int get_item_id(char *item)
 {
-	time_t now;
-	struct tm *tt;
+	int i;
 
-	time(&now);
-	tt = localtime(&now);
-	snprintf(buf, TIME_TIMESTAMP_SIZE, "%04d-%02d-%02d %02d:%02d:%02d",
-				tt->tm_year + 1900, tt->tm_mon, tt->tm_mday,
-				tt->tm_hour, tt->tm_min, tt->tm_sec);
-	return buf;
+	for (i = 0; i < (int)(sizeof(item_desc_tbl)/sizeof(item_desc_tbl[0])); i++) {
+		if (strcmp(item_desc_tbl[i]->name, item) == 0)
+			return item_desc_tbl[i]->item_id;
+	}
+	return ID_NULL;
 }
 
-static int tester_parse_items(void)
+static int battst_parse_items(void)
 {
 	int fd, cnt, size, pos = 0;
-	char buf[TESTER_CONTENT_SIZE + 1];
+	char buf[CONTENT_BUF_SIZE + 1];
 	char *pitems, *pcases, *str;
 
 	DEBUG("parsing items and updating cases\n");
-	pitems = malloc(TESTER_ITEMS_BUF_SIZE + 1);
-	pcases = malloc(TESTER_ITEMS_BUF_SIZE + 1);
+	pitems = malloc(ITEMS_BUF_SIZE + 1);
+	pcases = malloc(ITEMS_BUF_SIZE + 1);
 	if ((pitems == NULL) || (pcases == NULL)) {
 		DEBUG("parse items malloc error!\n");
 		goto error;
 	}
-	fd = open(TESTER_STAT_FILE_ITEMS, O_RDONLY);
+	fd = open(STATUS_FILE_ITEMS, O_RDONLY);
 	if (fd < 0) {
-		DEBUG("%s open fail!\n", TESTER_STAT_FILE_ITEMS);
+		DEBUG("%s open fail!\n", STATUS_FILE_ITEMS);
 		goto error;
 	}
-	cnt = read(fd, pitems, TESTER_ITEMS_BUF_SIZE);
+	cnt = read(fd, pitems, ITEMS_BUF_SIZE);
 	close(fd);
 	if (cnt < 1) {
-		DEBUG("%s may be empty!\n", TESTER_STAT_FILE_ITEMS);
+		DEBUG("%s may be empty!\n", STATUS_FILE_ITEMS);
 		goto error;
 	}
 	pitems[cnt] = '\0';
@@ -185,17 +99,17 @@ static int tester_parse_items(void)
 	str = pcases;
 	while ((cnt = get_next_content(pitems + pos, buf)) != -1) {
 		pos += cnt;
-		if (get_items_id(buf) == TESTER_ITEM_NULL) {
+		if (get_item_id(buf) == ID_NULL) {
 			DEBUG("invalid item: %s\n", buf);
 			goto error;
 		}
-		size = snprintf(str, TESTER_CONTENT_SIZE, "%s=0\n", buf);
+		size = snprintf(str, CONTENT_BUF_SIZE, "%s=0\n", buf);
 		str += size;
 	}
 	DEBUG("cases:\n%s\n", pcases);
-	fd = open(TESTER_STAT_FILE_CASES, O_RDWR | O_CREAT | O_TRUNC, 0666);
+	fd = open(STATUS_FILE_CASES, O_RDWR | O_CREAT | O_TRUNC, 0666);
 	if (fd < 0) {
-		DEBUG("%s open fail:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
+		DEBUG("%s open fail:%s\n", STATUS_FILE_CASES, strerror(errno));
 		goto error;
 	}
 	size = strlen(pcases);
@@ -214,7 +128,7 @@ error:
 	return -1;
 }
 
-static void tester_poweroff_check(void)
+static void battst_poweroff_check(void)
 {
 	char property_val[PROP_VALUE_MAX];
 
@@ -233,23 +147,23 @@ static void tester_poweroff_check(void)
 	}
 }
 
-static int tester_poweron_init(void)
+static int battst_poweron_init(void)
 {
 	int fd, err, cnt = 0;
 	char *pcases;
-	char buf1[TESTER_CONTENT_SIZE + 1];
-	char buf2[TESTER_CONTENT_SIZE + 1];
+	char buf1[CONTENT_BUF_SIZE + 1];
+	char buf2[CONTENT_BUF_SIZE + 1];
 	struct stat items_stat, cases_stat;
 
 	/* check and create batt_logs/enable if not exist */
-	if (access(TESTER_LOG_FILE_DIR, R_OK | W_OK) == -1) {
-		DEBUG("%s not exist!\n", TESTER_LOG_FILE_DIR);
-		if (mkdir(TESTER_LOG_FILE_DIR, 0666) == -1) {
-			DEBUG("can't create %s:%s", TESTER_LOG_FILE_DIR, strerror(errno));
+	if (access(DIR_LOGS_ROOT, R_OK | W_OK) == -1) {
+		DEBUG("%s not exist!\n", DIR_LOGS_ROOT);
+		if (mkdir(DIR_LOGS_ROOT, 0666) == -1) {
+			DEBUG("can't create %s:%s", DIR_LOGS_ROOT, strerror(errno));
 			return -1;
 		}
-		if (creat(TESTER_STAT_FILE_ENABLE, 0666) == -1) {
-			DEBUG("can't create %s:%s", TESTER_STAT_FILE_ENABLE, strerror(errno));
+		if (creat(STATUS_FILE_ENABLE, 0666) == -1) {
+			DEBUG("can't create %s:%s", STATUS_FILE_ENABLE, strerror(errno));
 			return -1;
 		}
 		DEBUG("create /batt_logs/enable success\n");
@@ -257,9 +171,9 @@ static int tester_poweron_init(void)
 	}
 
 	/* check enable */
-	fd = open(TESTER_STAT_FILE_ENABLE, O_RDONLY);
+	fd = open(STATUS_FILE_ENABLE, O_RDONLY);
 	if (fd < 0) {
-		DEBUG("can't open %s:%s\n", TESTER_STAT_FILE_ENABLE, strerror(errno));
+		DEBUG("can't open %s:%s\n", STATUS_FILE_ENABLE, strerror(errno));
 		return -1;
 	}
 	memset(buf1, 0, sizeof(buf1));
@@ -270,39 +184,39 @@ static int tester_poweron_init(void)
 		return -1;
 	}
 	/* check items and cases file */
-	if (stat(TESTER_STAT_FILE_ITEMS, &items_stat) != 0) {
-		DEBUG("%s stat error:%s\n", TESTER_STAT_FILE_ITEMS, strerror(errno));
+	if (stat(STATUS_FILE_ITEMS, &items_stat) != 0) {
+		DEBUG("%s stat error:%s\n", STATUS_FILE_ITEMS, strerror(errno));
 		return -1;
 	}
-	err = stat(TESTER_STAT_FILE_CASES, &cases_stat);
+	err = stat(STATUS_FILE_CASES, &cases_stat);
 	if ((err != 0) && (errno != ENOENT)) {
-		DEBUG("%s stat error!:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
+		DEBUG("%s stat error!:%s\n", STATUS_FILE_CASES, strerror(errno));
 		return -1;
 	}
 	if ((errno == ENOENT) || (items_stat.st_mtime > cases_stat.st_mtime)) {
-		if (tester_parse_items() != 0)
+		if (battst_parse_items() != 0)
 			return -1;
 		/* delete logs directory */
 		if (system("rm -rf /data/batt_logs/logs") != 0) {
-			DEBUG("can't del %s\n", TESTER_LOG_FILE_LOG_DIR);
+			DEBUG("can't del %s\n", DIR_LOGS_FILE);
 			return -1;
 		}
 	}
 	/* readout cases files and set items_id/step_id */
-	pcases = malloc(TESTER_ITEMS_BUF_SIZE + 1);
+	pcases = malloc(ITEMS_BUF_SIZE + 1);
 	if (pcases == NULL) {
 		DEBUG("pcases malloc error!\n");
 		return -1;
 	}
-	fd = open(TESTER_STAT_FILE_CASES, O_RDONLY);
+	fd = open(STATUS_FILE_CASES, O_RDONLY);
 	if (fd < 0) {
-		DEBUG("can't open %s:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
+		DEBUG("can't open %s:%s\n", STATUS_FILE_CASES, strerror(errno));
 		goto error;
 	}
-	cnt = read(fd, pcases, TESTER_ITEMS_BUF_SIZE);
+	cnt = read(fd, pcases, ITEMS_BUF_SIZE);
 	close(fd);
 	if ((cnt < 1)) {
-		DEBUG("%s may be empty:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
+		DEBUG("%s may be empty:%s\n", STATUS_FILE_CASES, strerror(errno));
 		goto error;
 	}
 	pcases[cnt] = '\0';
@@ -312,15 +226,15 @@ static int tester_poweron_init(void)
 		goto error;
 	}
 	DEBUG("first ready item:%s, current step:%s\n", buf1, buf2);
-	tester_status.item_id = get_items_id(buf1);
-	if (tester_status.item_id == TESTER_ITEM_NULL) {
-		DEBUG("invalid item: %s\n", buf1);
+	battst_status.item_desc = get_item_desc(buf1);
+	if (battst_status.item_desc == NULL) {
+		DEBUG("invalid item desc: %s\n", buf1);
 		goto error;
 	}
-	tester_status.items_desc = items_desc_tbl[tester_status.item_id];
-	tester_status.step_id = atoi(buf2);
-	if ((tester_status.step_id >= tester_status.items_desc->step_id_limit)
-	    || (tester_status.step_id < 0)) {
+	//tester_status.items_desc = items_desc_tbl[tester_status.item_id];
+	battst_status.step_id = atoi(buf2);
+	if ((battst_status.step_id >= battst_status.item_desc->step_desc->step_id_limit)
+	    || (battst_status.step_id < 0)) {
 		DEBUG("invalid step id\n");
 		goto error;
 	}
@@ -331,7 +245,7 @@ error:
 	return -1;
 }
 
-static void tester_mainloop(void)
+static void battst_mainloop(void)
 {
 	int i;
 
@@ -340,8 +254,8 @@ static void tester_mainloop(void)
 		int nevents;
 		int timeout = -1;
 
-		if (tester_mode_ops->preparetowait)
-			timeout = tester_mode_ops->preparetowait(&tester_status);
+		if (battst_mode_ops->preparetowait)
+			timeout = battst_mode_ops->preparetowait(&battst_status);
 		nevents = epoll_wait(epollfd, events, eventct, timeout);
 
 		if (nevents == -1) {
@@ -356,11 +270,11 @@ static void tester_mainloop(void)
 				(*(void (*)(int))events[i].data.ptr)(events[i].events);
 		}
 
-		if (!nevents && tester_mode_ops->update)
-			tester_mode_ops->update(&tester_status);
+		if (!nevents && battst_mode_ops->update)
+			battst_mode_ops->update(&battst_status);
 
-		if (tester_mode_ops->heartbeat)
-			tester_mode_ops->heartbeat(&tester_status);
+		if (battst_mode_ops->heartbeat)
+			battst_mode_ops->heartbeat(&battst_status);
 	}
 	return;
 }
@@ -371,21 +285,21 @@ int main(void)
 
 	klog_set_level(KLOG_LEVEL);
 
-	ret = tester_poweron_init();
+	ret = battst_poweron_init();
 	if (ret) {
 		DEBUG("tester_poweron_init fail!\n");
 		return ret;
 	}
 
-	tester_poweroff_check();
+	battst_poweroff_check();
 
-	DEBUG("[tester start]: item_id=%d:%s\n", tester_status.item_id,
-						  get_items_name(tester_status.item_id));
-	DEBUG("[tester start]: step_id=%d:%s\n", tester_status.step_id,
-				tester_status.items_desc->step_msg[tester_status.step_id]);
+	DEBUG("[tester start]: item_id=%d:%s\n", battst_status.item_desc->item_id,
+						battst_status.item_desc->name);
+	DEBUG("[tester start]: step_id=%d:%s\n", battst_status.step_id,
+			battst_status.item_desc->step_desc->step_msg[battst_status.step_id]);
 
-	tester_mode_ops = tester_mode_ops_tbl[tester_status.item_id];
-	if (tester_mode_ops == NULL) {
+	battst_mode_ops = battst_status.item_desc->ops;
+	if (battst_mode_ops == NULL) {
 		DEBUG("tester_mode_ops == NULL\n");
 		return -1;
 	}
@@ -395,49 +309,49 @@ int main(void)
 		DEBUG("Initialization failed, exiting\n");
 		exit(-1);
 	}
-	tester_mainloop();
+	battst_mainloop();
 	DEBUG("tester run error!\n");
 	return ret;
 }
 
-void tester_finish(void)
+void battst_finish(void)
 {
 	int fd, pos, cnt, size;
 	char *pcases, buf[2];
 
-	DEBUG("[tester finish]:%s\n", tester_status.items_desc->step_msg[tester_status.step_id]);
-	pcases = malloc(TESTER_ITEMS_BUF_SIZE);
+	DEBUG("[tester finish]:%s\n", battst_status.item_desc->step_desc->step_msg[battst_status.step_id]);
+	pcases = malloc(ITEMS_BUF_SIZE);
 	if (pcases == NULL) {
 		DEBUG("tester_finish malloc error!\n");
 		return;
 	}
-	fd = open(TESTER_STAT_FILE_CASES, O_RDONLY);
+	fd = open(STATUS_FILE_CASES, O_RDONLY);
 	if (fd < 0) {
-		DEBUG("can't open %s:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
+		DEBUG("can't open %s:%s\n", STATUS_FILE_CASES, strerror(errno));
 		goto error;
 	}
-	cnt = read(fd, pcases, TESTER_ITEMS_BUF_SIZE);
+	cnt = read(fd, pcases, ITEMS_BUF_SIZE);
 	close(fd);
 	if ((cnt < 1)) {
-		DEBUG("%s may be empty:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
+		DEBUG("%s may be empty:%s\n", STATUS_FILE_CASES, strerror(errno));
 		goto error;
 	}
 	pcases[cnt] = '\0';
 	pos = first_ready_item(pcases, NULL, NULL);
-	snprintf(buf, sizeof(buf), "%d", tester_status.step_id);
+	snprintf(buf, sizeof(buf), "%d", battst_status.step_id);
 	if (pcases[pos] != buf[0]) {
-		DEBUG("match error:step_id=%d, buf=%s\n", tester_status.step_id, buf);
+		DEBUG("match error:step_id=%d, buf=%s\n", battst_status.step_id, buf);
 		goto error;
 	}
 	/* reboot if finished the whole item test or increase step_id and write back */
-	if (++tester_status.step_id >= tester_status.items_desc->step_id_limit)
+	if (++battst_status.step_id >= battst_status.item_desc->step_desc->step_id_limit)
 		pcases[pos] = 'y';
 	else
 		pcases[pos] = ++buf[0];
 
-	fd = open(TESTER_STAT_FILE_CASES, O_RDWR | O_CREAT | O_TRUNC, 0666);
+	fd = open(STATUS_FILE_CASES, O_RDWR | O_CREAT | O_TRUNC, 0666);
 	if (fd < 0) {
-		DEBUG("%s open fail:%s\n", TESTER_STAT_FILE_CASES, strerror(errno));
+		DEBUG("%s open fail:%s\n", STATUS_FILE_CASES, strerror(errno));
 		goto error;
 	}
 	size = strlen(pcases);
